@@ -5,12 +5,12 @@
 
   DS.LSSerializer = DS.JSONSerializer.extend({
 
-    serializeHasMany: function(record, json, relationship) {
+    serializeHasMany: function(snapshot, json, relationship) {
       var key = relationship.key,
         kind = relationship.kind;
 
       if (kind === 'hasMany') {
-        json[key] = record.get(key).mapBy('id');
+        json[key] = snapshot.get(key).mapBy('id');
         // TODO support for polymorphic manyToNone and manyToMany relationships
       }
     },
@@ -213,7 +213,8 @@
 
     createRecord: function (store, type, snapshot) {
       var namespaceRecords = this._namespaceForType(type),
-          recordHash = record.serialize({includeId: true});
+          serializer = store.serializerFor(type.typeKey),
+          recordHash = serializer.serialize(snapshot, {includeId: true});
 
       namespaceRecords.records[recordHash.id] = recordHash;
 
@@ -223,9 +224,10 @@
 
     updateRecord: function (store, type, snapshot) {
       var namespaceRecords = this._namespaceForType(type),
+          serializer = store.serializerFor(type.typeKey)
           id = snapshot.id;
 
-      namespaceRecords.records[id] = record.serialize({ includeId: true });
+      namespaceRecords.records[id] = serializer.serialize(snapshot, { includeId: true });
 
       this.persistData(type, namespaceRecords);
       return Ember.RSVP.resolve();
@@ -252,7 +254,7 @@
     },
 
     loadData: function () {
-      var storage = localStorage.getItem(this.adapterNamespace());
+      var storage = this.getlocalStorage().getItem(this.adapterNamespace());
       return storage ? JSON.parse(storage) : {};
     },
 
@@ -262,8 +264,38 @@
 
       localStorageData[modelNamespace] = data;
 
-      localStorage.setItem(this.adapterNamespace(), JSON.stringify(localStorageData));
+      this.getlocalStorage().setItem(this.adapterNamespace(), JSON.stringify(localStorageData));
     },
+    
+    getLocalStorage: function() {
+        if(this_.localStorage) {
+            return this_.localStorage;
+        }
+        var storage;
+        try {
+            storage = this.getNativeStorage() || this._enableInMemoryStorage();
+        } catch(e) {
+            storage = this._enableInMemoryStorage(e)
+        }
+        return this._localStorage = storage;
+    },
+    
+    _enableInMemoryStorage: function(reason) {
+        this.trigger('persistenceUnavailable', reason);
+        return {
+            storage: {},
+            getItem: function(name) {
+                return this.storage[name];
+            },
+            setItem: function(name, value) {
+                this.storage[name] = value;
+            }
+        };
+    },
+    
+    getNativeStorage: function() {
+        return localStorage;
+    }
 
     _namespaceForType: function (type) {
       var namespace = this.modelNamespace(type),
