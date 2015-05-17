@@ -2,6 +2,9 @@
 
 ## Master
 
+### 0.5.3 (May 17, 2015)
+* add support for data 0.17
+
 ### 0.3.5 (April 3, 2015)
 * added snapshot support for data.16.1
 

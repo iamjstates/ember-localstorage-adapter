@@ -99,9 +99,9 @@
       @param {Object|String|Integer|null} id
       */
     find: function(store, type, id, opts) {
-      var adapter = this;
       var allowRecursive = true;
       var namespace = this._namespaceForType(type);
+      var record = Ember.A(namespace.records[id]);
 
       /**
        * In the case where there are relationships, this method is called again
@@ -115,43 +115,51 @@
         allowRecursive = opts.allowRecursive;
       }
 
-      return new Ember.RSVP.Promise(function(resolve, reject) {
-        var record = Ember.A(namespace.records[id]);
+      if (!record || !record.hasOwnProperty('id')) {
+        return Ember.RSVP.reject(new Error("Couldn't find record of"
+                                           + " type '" + type.typeKey
+                                           + "' for the id '" + id + "'."));
+      }
 
-        if (!record || !record.hasOwnProperty('id')) {
-          reject();
-          return;
-        }
-
-        if (allowRecursive) {
-          adapter.loadRelationships(type, record).then(function(finalRecord) {
-            resolve(finalRecord);
-          });
-        } else {
-          resolve(record);
-        }
-      });
+      if (allowRecursive) {
+        return this.loadRelationships(type, record);
+      } else {
+        return Ember.RSVP.resolve(record);
+      }
     },
 
-    findMany: function (store, type, ids) {
-      var adapter = this;
+    findMany: function (store, type, ids, opts) {
       var namespace = this._namespaceForType(type);
+      var adapter = this,
+          allowRecursive = true,
+          results = [], record;
 
-      return new Ember.RSVP.Promise(function(resolve, reject) {
-        var results = [];
+      /**
+       * In the case where there are relationships, this method is called again
+       * for each relation. Given the relations have references to the main
+       * object, we use allowRecursive to avoid going further into infinite
+       * recursiveness.
+       *
+       * Concept from ember-indexdb-adapter
+       */
+      if (opts && typeof opts.allowRecursive !== 'undefined') {
+        allowRecursive = opts.allowRecursive;
+      }
 
-        for (var i = 0; i < ids.length; i++) {
-          results.push(Ember.copy(namespace.records[ids[i]]));
+      for (var i = 0; i < ids.length; i++) {
+        record = namespace.records[ids[i]];
+        if (!record || !record.hasOwnProperty('id')) {
+          return Ember.RSVP.reject(new Error("Couldn't find record of type '" + type.typeKey
+                                             + "' for the id '" + ids[i] + "'."));
         }
+        results.push(Ember.copy(record));
+      }
 
-        resolve(results);
-      }).then(function(records) {
-        if (records.get('length')) {
-          return adapter.loadRelationshipsForMany(type, records);
-        } else {
-          return records;
-        }
-      });
+      if (results.get('length') && allowRecursive) {
+        return this.loadRelationshipsForMany(type, results);
+      } else {
+        return Ember.RSVP.resolve(results);
+      }
     },
 
     // Supports queries that look like this:
@@ -174,28 +182,28 @@
 
       if (results.get('length')) {
         results = this.loadRelationshipsForMany(type, results);
-        return Ember.RSVP.resolve(results);
       } else {
         return Ember.RSVP.reject();
       }
     },
 
     query: function (records, query) {
-      var results = [],
-          id, record, property, test, push;
-      for (id in records) {
-        record = records[id];
-        for (property in query) {
-          test = query[property];
-          push = false;
+      var results = [], record;
+      function recordMatchesQuery(record) {
+        return Ember.keys(query).every(function(property) {
+          var test = query[property];
           if (Object.prototype.toString.call(test) === '[object RegExp]') {
-            push = test.test(record[property]);
+            return test.test(record[property]);
           } else {
-            push = record[property] === test;
+            return record[property] === test;
           }
-        }
-        if (push) {
-          results.push(record);
+        });
+      }
+
+      for (var id in records) {
+        record = records[id];
+        if (recordMatchesQuery(record)) {
+          results.push(Ember.copy(record));
         }
       }
       return results;
@@ -266,7 +274,7 @@
 
       this.getlocalStorage().setItem(this.adapterNamespace(), JSON.stringify(localStorageData));
     },
-    
+
     getLocalStorage: function() {
         if(this_.localStorage) {
             return this_.localStorage;
@@ -279,7 +287,7 @@
         }
         return this._localStorage = storage;
     },
-    
+
     _enableInMemoryStorage: function(reason) {
         this.trigger('persistenceUnavailable', reason);
         return {
@@ -292,16 +300,16 @@
             }
         };
     },
-    
+    // This exists primarily as a testing extension point
     getNativeStorage: function() {
         return localStorage;
     }
 
     _namespaceForType: function (type) {
-      var namespace = this.modelNamespace(type),
-          storage   = localStorage.getItem(this.adapterNamespace());
+      var namespace = this.modelNamespace(type);
+      var storage   = this.loadData();
 
-      return storage ? JSON.parse(storage)[namespace] || {records: {}} : {records: {}};
+      return storage[namespace] || {records: {}};
     },
 
     modelNamespace: function(type) {
@@ -352,29 +360,31 @@
      * @param {Object} record
      */
     loadRelationships: function(type, record) {
-      var adapter = this;
+      var adapter = this,
+          resultJSON = {},
+          typeKey = type.typeKey,
+          relationshipNames, relationships,
+          relationshipPromises = [];
 
-      return new Ember.RSVP.Promise(function(resolve, reject) {
-        var resultJSON = {},
-            typeKey = type.typeKey,
-            relationshipNames, relationships,
-            relationshipPromises = [];
+      /**
+       * Create a chain of promises, so the relationships are
+       * loaded sequentially.  Think of the variable
+       * `recordPromise` as of the accumulator in a left fold.
+       */
+      var recordPromise = Ember.RSVP.resolve(record);
 
-        relationshipNames = Ember.get(type, 'relationshipNames');
-        relationships = relationshipNames.belongsTo;
-        relationships = relationships.concat(relationshipNames.hasMany);
+      relationshipNames = Ember.get(type, 'relationshipNames');
+      relationships = relationshipNames.belongsTo
+        .concat(relationshipNames.hasMany);
 
-        relationships.forEach(function(relationName) {
-          var relationModel = type.typeForRelationship(relationName),
-              relationEmbeddedId = record[relationName],
-              relationProp  = adapter.relationshipProperties(type, relationName),
-              relationType  = relationProp.kind,
-              /**
-               * This is the relationship field.
-               */
-              promise, embedPromise;
+      relationships.forEach(function(relationName) {
+        var relationModel = type.typeForRelationship(relationName);
+        var relationEmbeddedId = record[relationName];
+        var relationProp  = adapter.relationshipProperties(type, relationName);
+        var relationType  = relationProp.kind;
+        var foreignAdapter = type.store.adapterFor(relationModel);
 
-          var opts = {allowRecursive: false};
+        var opts = {allowRecursive: false};
 
           /**
            * embeddedIds are ids of relations that are included in the main
@@ -389,29 +399,25 @@
            *
            * In this case, cart belongsTo customer and its id is present in the
            * main payload. We find each of these records and add them to _embedded.
-           */
-          if (relationEmbeddedId) {
-            if (relationType == 'belongsTo' || relationType == 'hasOne') {
-              promise = adapter.find(null, relationModel, relationEmbeddedId, opts)
+         */
+        if (relationEmbeddedId && foreignAdapter === adapter)
+        {
+          recordPromise = recordPromise.then(function(recordPayload) {
+            var promise;
+            if (relationType === 'belongsTo' || relationType === 'hasOne') {
+              promise = adapter.find(null, relationModel, relationEmbeddedId, opts);
             } else if (relationType == 'hasMany') {
-              promise = adapter.findMany(null, relationModel, relationEmbeddedId, opts)
+              promise = adapter.findMany(null, relationModel, relationEmbeddedId, opts);
             }
 
-            embedPromise = new Ember.RSVP.Promise(function(resolve, reject) {
-              promise.then(function(relationRecord) {
-                var finalPayload = adapter.addEmbeddedPayload(record, relationName, relationRecord)
-                resolve(finalPayload);
-              });
+            return promise.then(function(relationRecord) {
+              return adapter.addEmbeddedPayload(recordPayload, relationName, relationRecord);
             });
-
-            relationshipPromises.push(embedPromise);
-          }
-        });
-
-        Ember.RSVP.all(relationshipPromises).then(function() {
-          resolve(record);
-        });
+          });
+        }
       });
+
+      return recordPromise;
     },
 
 
@@ -459,7 +465,7 @@
 
       if (isValidRelationship) {
         if (!payload['_embedded']) {
-          payload['_embedded'] = {}
+          payload['_embedded'] = {};
         }
 
         payload['_embedded'][relationshipName] = relationshipRecord;
@@ -493,47 +499,24 @@
      * @param {Object} recordsArray
      */
     loadRelationshipsForMany: function(type, recordsArray) {
-      var adapter = this;
+      var adapter = this,
+          promise = Ember.RSVP.resolve([]);
 
-      return new Ember.RSVP.Promise(function(resolve, reject) {
-        var recordsWithRelationships = [],
-            recordsToBeLoaded = [],
-            promises = [];
-
-        /**
-         * Some times Ember puts some stuff in arrays. We want to clean it so
-         * we know exactly what to iterate over.
-         */
-        for (var i in recordsArray) {
-          if (recordsArray.hasOwnProperty(i)) {
-            recordsToBeLoaded.push(recordsArray[i]);
-          }
-        }
-
-        var loadNextRecord = function(record) {
-          /**
-           * Removes the first item from recordsToBeLoaded
-           */
-          recordsToBeLoaded = recordsToBeLoaded.slice(1);
-
-          var promise = adapter.loadRelationships(type, record);
-
-          promise.then(function(recordWithRelationships) {
-            recordsWithRelationships.push(recordWithRelationships);
-
-            if (recordsToBeLoaded[0]) {
-              loadNextRecord(recordsToBeLoaded[0]);
-            } else {
-              resolve(recordsWithRelationships);
-            }
-          });
-        }
-
-        /**
-         * We start by the first record
-         */
-        loadNextRecord(recordsToBeLoaded[0]);
+      /**
+       * Create a chain of promises, so the records are loaded sequentially.
+       * Think of the variable promise as of the accumulator in a left fold.
+       */
+      recordsArray.forEach(function(record) {
+        promise = promise.then(function(records) {
+          return adapter.loadRelationships(type, record)
+            .then(function(loadedRecord) {
+              records.push(loadedRecord);
+              return records;
+            });
+        });
       });
+
+      return promise;
     },
 
 
