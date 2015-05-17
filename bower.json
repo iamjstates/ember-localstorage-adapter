@@ -21,6 +21,6 @@
   ],
   "dependencies": {
     "ember-data": ">= 1.0.0-beta.17",
-    "ember": ">= 1.13.0"
+    "ember": ">= 1.13.0-beta.1"
   }
 }
