@@ -303,7 +303,7 @@
     // This exists primarily as a testing extension point
     getNativeStorage: function() {
         return localStorage;
-    }
+    },
 
     _namespaceForType: function (type) {
       var namespace = this.modelNamespace(type);
