@@ -54,7 +54,7 @@
       if (payload && payload._embedded) {
         for (var relation in payload._embedded) {
           var relType = type.typeForRelationship(relation);
-          var typeName = relType.typeKey,
+          var typeName = relType.modelName,
               embeddedPayload = payload._embedded[relation];
 
           if (embeddedPayload) {
@@ -117,7 +117,7 @@
 
       if (!record || !record.hasOwnProperty('id')) {
         return Ember.RSVP.reject(new Error("Couldn't find record of"
-                                           + " type '" + type.typeKey
+                                           + " type '" + type.modelName
                                            + "' for the id '" + id + "'."));
       }
 
@@ -149,7 +149,7 @@
       for (var i = 0; i < ids.length; i++) {
         record = namespace.records[ids[i]];
         if (!record || !record.hasOwnProperty('id')) {
-          return Ember.RSVP.reject(new Error("Couldn't find record of type '" + type.typeKey
+          return Ember.RSVP.reject(new Error("Couldn't find record of type '" + type.modelName
                                              + "' for the id '" + ids[i] + "'."));
         }
         results.push(Ember.copy(record));
@@ -181,7 +181,7 @@
           results = this.query(namespace.records, query);
 
       if (results.get('length')) {
-        results = this.loadRelationshipsForMany(type, results);
+        return this.loadRelationshipsForMany(type, results);
       } else {
         return Ember.RSVP.reject();
       }
@@ -221,7 +221,7 @@
 
     createRecord: function (store, type, snapshot) {
       var namespaceRecords = this._namespaceForType(type),
-          serializer = store.serializerFor(type.typeKey),
+          serializer = store.serializerFor(type.modelName),
           recordHash = serializer.serialize(snapshot, {includeId: true});
 
       namespaceRecords.records[recordHash.id] = recordHash;
@@ -232,7 +232,7 @@
 
     updateRecord: function (store, type, snapshot) {
       var namespaceRecords = this._namespaceForType(type),
-          serializer = store.serializerFor(type.typeKey)
+          serializer = store.serializerFor(type.modelName)
           id = snapshot.id;
 
       namespaceRecords.records[id] = serializer.serialize(snapshot, { includeId: true });
@@ -276,29 +276,29 @@
     },
 
     getLocalStorage: function() {
-        if(this_.localStorage) {
-            return this_.localStorage;
-        }
-        var storage;
-        try {
-            storage = this.getNativeStorage() || this._enableInMemoryStorage();
-        } catch(e) {
-            storage = this._enableInMemoryStorage(e)
-        }
-        return this._localStorage = storage;
+      if (this._localStorage) { return this._localStorage; }
+
+      var storage;
+      try {
+        storage = this.getNativeStorage() || this._enableInMemoryStorage();
+      } catch (e) {
+        storage = this._enableInMemoryStorage(e);
+      }
+
+      return this._localStorage = storage;
     },
 
     _enableInMemoryStorage: function(reason) {
-        this.trigger('persistenceUnavailable', reason);
-        return {
-            storage: {},
-            getItem: function(name) {
-                return this.storage[name];
-            },
-            setItem: function(name, value) {
-                this.storage[name] = value;
-            }
-        };
+      this.trigger('persistenceUnavailable', reason);
+      return {
+        storage: {},
+        getItem: function(name) {
+          return this.storage[name];
+        },
+        setItem: function(name, value) {
+          this.storage[name] = value;
+        }
+      };
     },
     // This exists primarily as a testing extension point
     getNativeStorage: function() {
@@ -313,7 +313,7 @@
     },
 
     modelNamespace: function(type) {
-      return type.url || type.typeKey;
+      return type.url || type.modelName;
     },
 
 
@@ -362,7 +362,7 @@
     loadRelationships: function(type, record) {
       var adapter = this,
           resultJSON = {},
-          typeKey = type.typeKey,
+          modelName = type.modelName,
           relationshipNames, relationships,
           relationshipPromises = [];
 
@@ -386,19 +386,19 @@
 
         var opts = {allowRecursive: false};
 
-          /**
-           * embeddedIds are ids of relations that are included in the main
-           * payload, such as:
-           *
-           * {
-           *    cart: {
-           *      id: "s85fb",
-           *      customer: "rld9u"
-           *    }
-           * }
-           *
-           * In this case, cart belongsTo customer and its id is present in the
-           * main payload. We find each of these records and add them to _embedded.
+        /**
+         * embeddedIds are ids of relations that are included in the main
+         * payload, such as:
+         *
+         * {
+         *    cart: {
+         *      id: "s85fb",
+         *      customer: "rld9u"
+         *    }
+         * }
+         *
+         * In this case, cart belongsTo customer and its id is present in the
+         * main payload. We find each of these records and add them to _embedded.
          */
         if (relationEmbeddedId && foreignAdapter === adapter)
         {
