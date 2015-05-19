@@ -262,7 +262,7 @@
     },
 
     loadData: function () {
-      var storage = this.getlocalStorage().getItem(this.adapterNamespace());
+      var storage = this.getLocalStorage().getItem(this.adapterNamespace());
       return storage ? JSON.parse(storage) : {};
     },
 
@@ -272,7 +272,7 @@
 
       localStorageData[modelNamespace] = data;
 
-      this.getlocalStorage().setItem(this.adapterNamespace(), JSON.stringify(localStorageData));
+      this.getLocalStorage().setItem(this.adapterNamespace(), JSON.stringify(localStorageData));
     },
 
     getLocalStorage: function() {
