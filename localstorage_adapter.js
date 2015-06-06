@@ -232,7 +232,7 @@
 
     updateRecord: function (store, type, snapshot) {
       var namespaceRecords = this._namespaceForType(type),
-          serializer = store.serializerFor(type.modelName)
+          serializer = store.serializerFor(type.modelName),
           id = snapshot.id;
 
       namespaceRecords.records[id] = serializer.serialize(snapshot, { includeId: true });
