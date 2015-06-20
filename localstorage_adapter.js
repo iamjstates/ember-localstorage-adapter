@@ -10,7 +10,7 @@
         kind = relationship.kind;
 
       if (kind === 'hasMany') {
-        json[key] = snapshot.get(key, { ids: true };
+        json[key] = snapshot.get(key, { ids: true });
         // TODO support for polymorphic manyToNone and manyToMany relationships
       }
     },
