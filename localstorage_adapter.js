@@ -177,36 +177,40 @@
     //
     //    { complete: true, name: /foo|bar/ }
     findQuery: function (store, type, query, recordArray) {
-      var namespace = this._namespaceForType(type),
-          results = this.query(namespace.records, query);
-
-      if (results.get('length')) {
-        return this.loadRelationshipsForMany(store, type, results);
-      } else {
-        return Ember.RSVP.reject();
-      }
+      Ember.deprecate('JSONAdapter#findQuery has been deprecated and renamed to `query`.');
     },
 
-    query: function (records, query) {
-      var results = [], record;
-      function recordMatchesQuery(record) {
-        return Ember.keys(query).every(function(property) {
-          var test = query[property];
-          if (Object.prototype.toString.call(test) === '[object RegExp]') {
-            return test.test(record[property]);
-          } else {
-            return record[property] === test;
-          }
-        });
-      }
-
-      for (var id in records) {
-        record = records[id];
-        if (recordMatchesQuery(record)) {
-          results.push(Ember.copy(record));
+    _resultDict: function(records, query) {
+        var results = [], record,
+            _this = this;
+        for (var id in records) {
+            record = records[id];
+            if (_this._recordMatchedQuery(record, query)) {
+              results.push(Ember.copy(record));
+            }
         }
-      }
-      return results;
+        return results;
+    },
+    _recordMatchedQuery: function(record, query) {
+        return Ember.keys(query).every(function(property) {
+            var test = query[property];
+            if(Object.prototype.toString.call(test) === '[object RegExp]') {
+                return test.test(record[property]);
+            } else {
+                return record[property] === test;
+            }
+        });
+    },
+    query: function(store, type, query) {
+        var namespace = this._namespaceForType(type),
+            results = this._resultDict(namespace.records, query);
+
+        if (results.get('length')) {
+            return this.loadRelationshipsForMany(store, type, results);
+          } else {
+            return Ember.RSVP.reject();
+          }
+          return results;
     },
 
     findAll: function (store, type) {
