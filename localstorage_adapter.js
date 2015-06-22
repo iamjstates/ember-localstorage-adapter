@@ -178,6 +178,7 @@
     //    { complete: true, name: /foo|bar/ }
     findQuery: function (store, type, query, recordArray) {
       Ember.deprecate('JSONAdapter#findQuery has been deprecated and renamed to `query`.');
+      this.query(store, type, query);
     },
 
     _resultDict: function(records, query) {
@@ -191,6 +192,7 @@
         }
         return results;
     },
+    
     _recordMatchedQuery: function(record, query) {
         return Ember.keys(query).every(function(property) {
             var test = query[property];
@@ -201,6 +203,7 @@
             }
         });
     },
+    
     query: function(store, type, query) {
         var namespace = this._namespaceForType(type),
             results = this._resultDict(namespace.records, query);
