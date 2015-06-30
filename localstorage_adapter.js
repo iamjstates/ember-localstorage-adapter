@@ -194,7 +194,7 @@
     },
     
     _recordMatchedQuery: function(record, query) {
-        return Ember.keys(query).every(function(property) {
+        return Object.keys(query).every(function(property) {
             var test = query[property];
             if(Object.prototype.toString.call(test) === '[object RegExp]') {
                 return test.test(record[property]);
