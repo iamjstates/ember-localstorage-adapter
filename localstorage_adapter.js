@@ -51,6 +51,7 @@
      * @param {Object} payload returned JSON
      */
     extractSingle: function(store, type, payload) {
+      var included = [];
       if (payload && payload._embedded) {
         for (var relation in payload._embedded) {
           var relType = type.typeForRelationship(relation);
@@ -59,9 +60,13 @@
 
           if (embeddedPayload) {
             if (Ember.isArray(embeddedPayload)) {
-              store.pushMany(typeName, embeddedPayload);
+              //store.pushMany(typeName, embeddedPayload);
+              embeddedPayload.forEach(function(record) {
+                included.pushObject(this.normalize(relType,record).data);
+              }.bind(this));
             } else {
-              store.push(typeName, embeddedPayload);
+              //store.push(typeName, embeddedPayload);
+              included.pushObject(this.normalize(relType, embeddedPayload).data);
             }
           }
         }
@@ -81,11 +86,29 @@
      * @param {DS.Model} type the type/model
      * @param {Array} payload returned JSONs
      */
-    extractArray: function(store, type, payload) {
+    /*extractArray: function(store, type, payload) {
       return payload.map(function(json) {
         return this.extractSingle(store, type, json);
       }, this);
-    }
+    }*/
+    normalizeArrayResponse: function(store, type, payload) {
+      var response = { data: [], included: [] };
+
+      payload.forEach(function(json){
+      var normalized = this.normalizeSingleResponse(store, type, json);
+      response.data.pushObject(normalized.data);
+
+      if(normalized.included){
+        normalized.included.forEach(function(included){
+          if(!response.included.contains(included.id)){
+            response.included.addObject(included);
+          }
+        });
+      }
+      }.bind(this));
+
+      return response;
+     }
 
   });
 
@@ -98,7 +121,7 @@
       @param {DS.Model} type
       @param {Object|String|Integer|null} id
       */
-    find: function(store, type, id, opts) {
+    findRecord: function(store, type, id, opts) {
       var allowRecursive = true;
       var namespace = this._namespaceForType(type);
       var record = Ember.A(namespace.records[id]);
@@ -192,7 +215,7 @@
         }
         return results;
     },
-    
+
     _recordMatchedQuery: function(record, query) {
         return Object.keys(query).every(function(property) {
             var test = query[property];
@@ -203,8 +226,8 @@
             }
         });
     },
-    
-    query: function(store, type, query) {
+
+    query: function(store, type, query, recordArray) {
         var namespace = this._namespaceForType(type),
             results = this._resultDict(namespace.records, query);
 
@@ -389,7 +412,7 @@
         var relationEmbeddedId = record[relationName];
         var relationProp  = adapter.relationshipProperties(type, relationName);
         var relationType  = relationProp.kind;
-        var foreignAdapter = store.adapterFor(relationName);
+        var foreignAdapter = store.adapterFor(relationName.modelName);
 
         var opts = {allowRecursive: false};
 
@@ -412,7 +435,7 @@
           recordPromise = recordPromise.then(function(recordPayload) {
             var promise;
             if (relationType === 'belongsTo' || relationType === 'hasOne') {
-              promise = adapter.find(null, relationModel, relationEmbeddedId, opts);
+              promise = adapter.findRecord(null, relationModel, relationEmbeddedId, opts);
             } else if (relationType == 'hasMany') {
               promise = adapter.findMany(null, relationModel, relationEmbeddedId, opts);
             }
@@ -467,7 +490,7 @@
      */
     addEmbeddedPayload: function(payload, relationshipName, relationshipRecord) {
       var objectHasId = (relationshipRecord && relationshipRecord.id),
-          arrayHasIds = (relationshipRecord.length && relationshipRecord.everyBy("id")),
+          arrayHasIds = (relationshipRecord.length && relationshipRecord.isEvery("id")),
           isValidRelationship = (objectHasId || arrayHasIds);
 
       if (isValidRelationship) {
