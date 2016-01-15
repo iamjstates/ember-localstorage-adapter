@@ -1,6 +1,6 @@
 {
   "name": "ember-localstorage-adapter",
-  "version": "0.5.11",
+  "version": "0.5.12",
   "homepage": "https://github.com/iamjstates/ember-localstorage-adapter",
   "authors": [
     "Ryan Florence <rpflorence@gmail.com>",
