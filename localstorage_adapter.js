@@ -3,7 +3,7 @@
 (function () {
   'use strict';
 
-  DS.LSSerializer = DS.JSONSerializer.extend({
+  LSSerializer = JSONSerializer.extend({
 
     serializeHasMany: function(snapshot, json, relationship) {
       var key = relationship.key,
