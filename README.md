@@ -5,7 +5,7 @@ Status](https://travis-ci.org/locks/ember-localstorage-adapter.svg?branch=master
 
 Store your ember application data in localStorage.
 
-Compatible with Ember Data 1.13 and above.
+Compatible with Ember Data 2.0
 
 **NOTE**: New versions of the `localStorage` adapter are no longer compatible
 with older versions of Ember Data. For older versions, checkout the `pre-beta`
