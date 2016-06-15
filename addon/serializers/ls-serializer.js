@@ -1,7 +1,7 @@
 import Ember from 'ember';
-import DS from 'ember-data';
+import JSONSerializer from 'ember-data/serializers/json';
 
-export default DS.JSONSerializer.extend({
+export default JSONSerializer.extend({
   /**
    * Invokes the new serializer API.
    * This should be removed in 2.0
@@ -10,13 +10,10 @@ export default DS.JSONSerializer.extend({
 
   serializeHasMany: function(snapshot, json, relationship) {
     var key = relationship.key;
-    var payloadKey = this.keyForRelationship ? this.keyForRelationship(key, "hasMany") : key;
-    var relationshipType = snapshot.type.determineRelationshipType(relationship, this.store);
-
-    if (relationshipType === 'manyToNone' ||
-        relationshipType === 'manyToMany' ||
-          relationshipType === 'manyToOne') {
-      json[payloadKey] = snapshot.hasMany(key, { ids: true });
+    var kind = relationship.kind;
+	
+    if (kind === 'hasMany') {
+      json[key] = snapshot.hasMany(key, { ids: true });
     // TODO support for polymorphic manyToNone and manyToMany relationships
     }
   },

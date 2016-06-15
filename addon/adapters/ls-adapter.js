@@ -1,9 +1,9 @@
 import Ember from 'ember';
-import DS from 'ember-data';
+import Adapter from "ember-data/adapter";
 
 const DEFAULT_NAMESPACE = 'DS.LSAdapter';
 
-const LSAdapter = DS.Adapter.extend(Ember.Evented, {
+const LSAdapter = Adapter.extend(Ember.Evented, {
   /**
    * This governs if promises will be resolved immeadiatly for `findAll`
    * requests or if they will wait for the store requests to finish. This matches
