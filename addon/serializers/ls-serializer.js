@@ -11,7 +11,7 @@ export default JSONSerializer.extend({
   serializeHasMany: function(snapshot, json, relationship) {
     var key = relationship.key;
     var kind = relationship.kind;
-	
+
     if (kind === 'hasMany') {
       json[key] = snapshot.hasMany(key, { ids: true });
     // TODO support for polymorphic manyToNone and manyToMany relationships
@@ -96,7 +96,7 @@ export default JSONSerializer.extend({
 
       if(normalized.included){
         normalized.included.forEach(function(included){
-          if(!response.included.contains(included.id)){
+          if(!response.included.includes(included.id)){
             response.included.addObject(included);
           }
         });
